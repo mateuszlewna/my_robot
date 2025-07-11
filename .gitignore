@@ -1,0 +1,8 @@
+# ROS 2 workspace ignore file
+build/
+install/
+log/
+.ros/
+.vscode/ # Optional: if you use VSCode and don't want to track its settings
+*.backup # Ignore backup files
+*.swp    # Ignore vim swap files
