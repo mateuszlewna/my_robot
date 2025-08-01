@@ -10,14 +10,13 @@ slam_toolbox:
     map_frame: map
     base_frame: base_link
     scan_topic: /scan
-    
     mode: mapping  # <-- KRYTYCZNE: Zmienione na 'mapping' do tworzenia mapy
 
     # Logowanie i podstawowe ustawienia
     debug_logging: false
-    throttle_scans: 1
+    throttle_scans: 2
     transform_publish_period: 0.02
-    map_update_interval: 1.5      # <-- ZMNIEJSZONO: Częstsza aktualizacja mapy w RViz
+    map_update_interval: 0.5      # <-- ZMNIEJSZONO: Częstsza aktualizacja mapy w RViz
     resolution: 0.05
     
     # Parametry sensora - dopasowane do Twojego sprzętu
@@ -25,14 +24,14 @@ slam_toolbox:
     max_laser_range: 16.0         # <-- ZMIENIONO: Zgodnie z ostrzeżeniem z poprzedniego logu
 
     # Parametry synchronizacji i buforów
-    minimum_time_interval: 0.25   # <-- ZMNIEJSZONO: Szybsza reakcja na ruch
+    minimum_time_interval: 0.1   # <-- ZMNIEJSZONO: Szybsza reakcja na ruch
     transform_timeout: 1.0        # <-- KRYTYCZNIE ZWIĘKSZONO: Daje więcej czasu na znalezienie transformacji
     tf_buffer_duration: 30.0      # Bufor 30 sekund jest OK
 
     # Parametry dopasowania skanów
     use_scan_matching: true
     use_scan_barycenter: true
-    minimum_travel_distance: 0.2
+    minimum_travel_distance: 0.1
     minimum_travel_heading: 0.17 # ok. 10 stopni
     scan_buffer_size: 10
     scan_buffer_maximum_scan_distance: 10.0

@@ -61,8 +61,8 @@ class OdometryPublisher(Node):
 
         # --- Parametry Robota (USTAWIONE NA TWOJE ZMIERZONE WARTOŚCI!) ---
         self.wheel_radius = 0.0325     # Promień koła w metrach (32.5 mm, z URDF)
-        self.wheel_separation = 0.232  # Rozstaw kół w metrach (232 mm, z URDF, odległość między środkami kół)
-                                       # Z Twojego URDF: (0.116 * 2) = 0.232
+        self.wheel_separation = 0.232*2  # Rozstaw kół w metrach (232 mm, z URDF, odległość między środkami kół)
+                                       # Z Twojego URDF: (0.116 * 2) = 0.232 razy dwa zeby wyregulowac obrót
         self.ticks_per_revolution = 2507 # Uśredniona liczba impulsów na obrót KOŁA
 
         # Piny GPIO dla enkoderów (numery BCM) - Zgodnie z Twoimi podłączeniami
