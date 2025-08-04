@@ -11,50 +11,50 @@ slam_toolbox:
     base_frame: base_link
     scan_topic: /scan
     
-    mode: mapping  # <-- KRYTYCZNE: Zmienione na 'mapping' do tworzenia mapy
+    mode: mapping  # Tryb mapowania
 
     # Logowanie i podstawowe ustawienia
-    debug_logging: false
+    debug_logging: true  # Włączone dla debugowania problemów
     throttle_scans: 1
-    transform_publish_period: 0.02
-    map_update_interval: 1.5      # <-- ZMNIEJSZONO: Częstsza aktualizacja mapy w RViz
+    transform_publish_period: 0.05  # Zwiększono do 0.05 s (20 Hz) dla mniejszego obciążenia
+    map_update_interval: 1.0  # Zmniejszono do 1.0 s dla płynniejszej aktualizacji w RViz
     resolution: 0.05
     
-    # Parametry sensora - dopasowane do Twojego sprzętu
-    laser_min_range: 0.2          # <-- DODANO: Zgodnie z ostrzeżeniem z poprzedniego logu
-    max_laser_range: 16.0         # <-- ZMIENIONO: Zgodnie z ostrzeżeniem z poprzedniego logu
+    # Parametry sensora - dopasowane do RPLIDAR A2
+    laser_min_range: 0.3  # Zwiększono, aby odfiltrować szumy bliżej sensora
+    max_laser_range: 12.0  # Zmniejszono dla RPLIDAR A2 (dla A3 ustaw 25.0)
 
     # Parametry synchronizacji i buforów
-    minimum_time_interval: 0.25   # <-- ZMNIEJSZONO: Szybsza reakcja na ruch
-    transform_timeout: 1.0        # <-- KRYTYCZNIE ZWIĘKSZONO: Daje więcej czasu na znalezienie transformacji
-    tf_buffer_duration: 30.0      # Bufor 30 sekund jest OK
+    minimum_time_interval: 0.1  # Zmniejszono dla szybszej reakcji na ruch
+    transform_timeout: 1.0
+    tf_buffer_duration: 20.0  # Zmniejszono dla szybszego zarządzania buforem
 
     # Parametry dopasowania skanów
-    use_scan_matching: true
+    use_scan_matching: true 
     use_scan_barycenter: true
-    minimum_travel_distance: 0.2
-    minimum_travel_heading: 0.17 # ok. 10 stopni
-    scan_buffer_size: 10
-    scan_buffer_maximum_scan_distance: 10.0
+    minimum_travel_distance: 0.1  # Zmniejszono dla częstszych aktualizacji pozycji
+    minimum_travel_heading: 0.087  # ~5 stopni, dla większej czułości na rotację
+    scan_buffer_size: 20  # Zwiększono dla lepszej korelacji w dynamicznych środowiskach
+    scan_buffer_maximum_scan_distance: 12.0  # Dopasowano do max_laser_range
     
     # Parametry zamykania pętli
     do_loop_closing: true
-    loop_search_maximum_distance: 10.0
-    link_match_minimum_response_fine: 0.1
-    link_scan_maximum_distance: 1.5
-    loop_match_minimum_chain_size: 10
-    loop_match_minimum_response_coarse: 0.35
-    loop_match_minimum_response_fine: 0.45
+    loop_search_maximum_distance: 12.0  # Zwiększono dla większych przestrzeni
+    link_match_minimum_response_fine: 0.2  # Zwiększono dla bardziej rygorystycznego dopasowania
+    link_scan_maximum_distance: 2.0  # Zwiększono dla większej tolerancji
+    loop_match_minimum_chain_size: 8  # Zmniejszono dla szybszego wykrywania pętli
+    loop_match_minimum_response_coarse: 0.4  # Nieco zwiększono dla stabilności
+    loop_match_minimum_response_fine: 0.5  # Zwiększono dla dokładniejszego zamykania pętli
     
-    # Pozostałe parametry mogą na razie zostać domyślne
+    # Pozostałe parametry
     correlation_search_space_dimension: 0.5
     correlation_search_space_resolution: 0.01
     correlation_search_space_smear_deviation: 0.1
-    loop_search_space_dimension: 8.0
+    loop_search_space_dimension: 10.0  # Zwiększono dla większych przestrzeni
     loop_search_space_resolution: 0.05
     loop_search_space_smear_deviation: 0.03
-    distance_variance_penalty: 0.5
-    angle_variance_penalty: 1.0
+    distance_variance_penalty: 0.3  # Zmniejszono dla mniejszej kary za odległość
+    angle_variance_penalty: 0.7  # Zmniejszono dla mniejszej kary za kąt
     fine_search_angle_offset: 0.00349
     coarse_search_angle_offset: 0.349
     coarse_angle_resolution: 0.0349
