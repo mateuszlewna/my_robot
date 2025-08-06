@@ -25,7 +25,7 @@ from nav2_common.launch import RewrittenYaml
 
 def generate_launch_description():
     # Get the launch directory
-    bringup_dir = get_package_share_directory('my_robot')
+    bringup_dir = get_package_share_directory('robot')
 
     namespace = LaunchConfiguration('namespace')
     map_yaml_file = LaunchConfiguration('map')
@@ -64,7 +64,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'map',
-            default_value=os.path.join(bringup_dir, 'maps', 'mapa_protolabu.yaml'),
+            default_value=os.path.join(bringup_dir, 'maps', 'mapa_protolabu_map.yaml'),
             description='Full path to map yaml file to load'),
 
         DeclareLaunchArgument(
