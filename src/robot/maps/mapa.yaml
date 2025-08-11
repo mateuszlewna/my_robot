@@ -1,0 +1,6 @@
+/map_server:
+  ros__parameters:
+    frame_id: "map"
+    use_sim_time: false
+    topic_name: "map"
+    yaml_filename: "/home/mateusz/mapy/mapa_testowa.yaml"
