@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped
@@ -84,36 +86,38 @@ def main(args=None):
     start_x = start_pose.position.x
     start_y = start_pose.position.y
     q = start_pose.orientation
-    start_yaw = math.degrees(math.atan2(2.0 * (q.w * q.z), 1.0 - 2.0 * (q.z * q.z)))
+    start_yaw = math.degrees(math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)))
 
-    # Definicja ruchów względem pozycji startowej
+    # Definicja ruchów względem pozycji startowej dla trajektorii prostokątnej
     moves = [
-        ("forward", 1.0),
-        ("turn", 90),
-        ("forward", 0.5),
-        ("turn", 90),
-        ("forward", 1.0),
-        ("turn", 90),
-        ("forward", 0.5),
-        ("turn", 90)
+        ("forward", 1.0),  # Bok 1: 1m do przodu
+        ("turn", 90),      # Skręt 90° w lewo
+        ("forward", 0.5),  # Bok 2: 0.5m do przodu
+        ("turn", 90),      # Skręt 90° w lewo
+        ("forward", 1.0),  # Bok 3: 1m do przodu
+        ("turn", 90),      # Skręt 90° w lewo
+        ("forward", 0.5),  # Bok 4: 0.5m do przodu (zamknięcie prostokąta)
+        ("turn", 90)       # Skręt 90° w lewo, aby wrócić do początkowej orientacji
     ]
 
-    # Generujemy listę pozycji globalnych
+    # Generujemy listę pozycji globalnych (tylko po ruchach forward, z orientacją po poprzednim turn)
     poses = []
     x, y, yaw_deg = start_x, start_y, start_yaw
     for action, value in moves:
         if action == "forward":
-            # Przemieszczenie w aktualnym kierunku
             yaw_rad = math.radians(yaw_deg)
             x += value * math.cos(yaw_rad)
             y += value * math.sin(yaw_rad)
+            # Dodajemy pose po forward z bieżącą orientacją (po poprzednim turn)
+            poses.append(create_pose(x, y, yaw_deg))
         elif action == "turn":
-            # Zmiana orientacji
             yaw_deg = (yaw_deg + value) % 360
 
-        poses.append(create_pose(x, y, yaw_deg))
+    # Opcjonalnie: Dodaj ostatnią pose z tą samą pozycją, ale z finalną orientacją po ostatnim turn
+    # To pozwoli robotowi obrócić się w miejscu do początkowej orientacji bez ruchu
+    # poses.append(create_pose(x, y, yaw_deg))
 
-    # Wysyłamy całą trasę
+    # Wysyłamy całą trasę (narożniki prostokąta)
     node.send_goal(poses)
     rclpy.spin(node)
 
