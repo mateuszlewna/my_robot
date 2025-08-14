@@ -21,7 +21,7 @@ class MoveSequenceOdometry(Node):
         q = msg.pose.pose.orientation
         self.current_yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
 
-    def move_forward(self, distance, speed=0.3):
+    def move_forward(self, distance, speed=0.5):
         start_x, start_y = self.current_x, self.current_y
         cmd = Twist()
         cmd.linear.x = speed
@@ -31,7 +31,7 @@ class MoveSequenceOdometry(Node):
         cmd.linear.x = 0.0
         self.cmd_vel_pub.publish(cmd)
 
-    def rotate(self, angle, angular_speed=0.7):
+    def rotate(self, angle, angular_speed=1):
         start_yaw = self.current_yaw
         cmd = Twist()
         cmd.angular.z = angular_speed if angle > 0 else -angular_speed
