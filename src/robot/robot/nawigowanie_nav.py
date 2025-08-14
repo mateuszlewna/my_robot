@@ -1,125 +1,116 @@
-#!/usr/bin/env python3
-
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped
-from nav2_msgs.action import NavigateThroughPoses
-from rclpy.action import ActionClient
+from geometry_msgs.msg import Twist
+import tf2_ros
 import math
-import tf_transformations
-import time
 
 
-def create_pose(x, y, yaw_deg, frame_id="map"):
-    pose = PoseStamped()
-    pose.header.frame_id = frame_id
-    pose.pose.position.x = x
-    pose.pose.position.y = y
-    pose.pose.position.z = 0.0
-    yaw_rad = math.radians(yaw_deg)
-    q = tf_transformations.quaternion_from_euler(0, 0, yaw_rad)
-    pose.pose.orientation.x = q[0]
-    pose.pose.orientation.y = q[1]
-    pose.pose.orientation.z = q[2]
-    pose.pose.orientation.w = q[3]
-    return pose
-
-
-class NavThroughPosesClient(Node):
+class MoveSequence(Node):
     def __init__(self):
-        super().__init__('nav_through_poses_client')
-        self._action_client = ActionClient(self, NavigateThroughPoses, 'navigate_through_poses')
-        self._initpose_pub = self.create_publisher(PoseWithCovarianceStamped, '/initialpose', 10)
+        super().__init__('move_sequence')
+        self.pub = self.create_publisher(Twist, '/cmd_vel', 10)
 
-        self._amcl_pose_sub = self.create_subscription(
-            PoseWithCovarianceStamped,
-            '/amcl_pose',
-            self.amcl_pose_callback,
-            10
-        )
-        self._current_pose = None
+        # Inicjalizacja listenera TF
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-    def amcl_pose_callback(self, msg):
-        self._current_pose = msg
+        self.current_x = 0.0
+        self.current_y = 0.0
+        self.current_yaw = 0.0
 
-    def set_initial_pose_from_amcl(self):
-        while rclpy.ok() and self._current_pose is None:
-            self.get_logger().info("Czekam na /amcl_pose...")
-            rclpy.spin_once(self, timeout_sec=0.1)
+        # Timer do cyklicznego aktualizowania pozycji z TF
+        self.create_timer(0.1, self.update_pose)
 
-        if self._current_pose:
-            self.get_logger().info("Ustawiam initial pose na obecną pozycję robota")
-            self._initpose_pub.publish(self._current_pose)
-            time.sleep(1)
+    def update_pose(self):
+        try:
+            # Pobierz transformację z map do base_link
+            trans = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time())
+            self.current_x = trans.transform.translation.x
+            self.current_y = trans.transform.translation.y
+            # Konwersja kwaternionu na yaw
+            q = trans.transform.rotation
+            self.current_yaw = math.atan2(
+                2.0 * (q.w * q.z),
+                1.0 - 2.0 * (q.z * q.z)
+            )
+            self.get_logger().info(f"TF Pose: x={self.current_x}, y={self.current_y}, yaw={self.current_yaw}")
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            self.get_logger().warn(f"TF lookup failed: {e}")
 
-    def send_goal(self, poses_list):
-        self._action_client.wait_for_server()
-        goal_msg = NavigateThroughPoses.Goal()
-        goal_msg.poses = poses_list
-        self._send_goal_future = self._action_client.send_goal_async(goal_msg)
-        self._send_goal_future.add_done_callback(self.goal_response_callback)
+    def shortest_angular_distance(self, from_angle, to_angle):
+        """Oblicza najmniejszą różnicę kątów z uwzględnieniem zakresu ±π."""
+        diff = to_angle - from_angle
+        while diff > math.pi:
+            diff -= 2 * math.pi
+        while diff < -math.pi:
+            diff += 2 * math.pi
+        return diff
 
-    def goal_response_callback(self, future):
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            self.get_logger().info('Goal rejected :(')
-            return
-        self.get_logger().info('Goal accepted :)')
-        self._get_result_future = goal_handle.get_result_async()
-        self._get_result_future.add_done_callback(self.get_result_callback)
+    def move_forward(self, distance):
+        start_x, start_y = self.current_x, self.current_y
+        cmd = Twist()
+        cmd.linear.x = 0.4  # Stała prędkość liniowa
+        start_time = self.get_clock().now()
+        timeout = 20.0  # Zwiększono timeout do 20 sekund
+        while math.sqrt((self.current_x - start_x) ** 2 +
+                        (self.current_y - start_y) ** 2) < distance:
+            if (self.get_clock().now() - start_time).nanoseconds / 1e9 > timeout:
+                self.get_logger().warn(f"Timeout during move_forward ({distance}m)")
+                break
+            current_distance = math.sqrt((self.current_x - start_x) ** 2 +
+                                        (self.current_y - start_y) ** 2)
+            self.get_logger().info(f"Current distance: {current_distance:.3f}/{distance}m")
+            self.pub.publish(cmd)
+            rclpy.spin_once(self, timeout_sec=0.5)
+        cmd.linear.x = 0.0
+        self.pub.publish(cmd)
+        self.get_logger().info(f"Finished move_forward ({distance}m)")
 
-    def get_result_callback(self, future):
-        result = future.result().result
-        self.get_logger().info(f'Result: {result}')
-        rclpy.shutdown()
+    def rotate(self, angle):
+        start_yaw = self.current_yaw
+        cmd = Twist()
+        cmd.angular.z = 1.0 if angle > 0 else -1.0  # Zwiększono prędkość kątową
+        start_time = self.get_clock().now()
+        timeout = 20.0  # Zwiększono timeout do 20 sekund
+        turned_angle = 0.0
+        while abs(turned_angle) < abs(angle):
+            if (self.get_clock().now() - start_time).nanoseconds / 1e9 > timeout:
+                self.get_logger().warn(f"Timeout during rotate ({angle}rad)")
+                break
+            turned_angle = self.shortest_angular_distance(start_yaw, self.current_yaw)
+            self.get_logger().info(f"Current turned angle: {turned_angle:.3f}/{angle}rad")
+            self.pub.publish(cmd)
+            rclpy.spin_once(self, timeout_sec=0.5)
+        cmd.angular.z = 0.0
+        self.pub.publish(cmd)
+        self.get_logger().info(f"Finished rotate ({angle}rad)")
+
+    def execute_sequence(self):
+        moves = [
+            ("forward", 1.0),
+            ("turn", math.pi / 2),
+            ("forward", 0.5),
+            ("turn", math.pi / 2),
+            ("forward", 1.0),
+            ("turn", math.pi / 2),
+            ("forward", 0.5),
+            ("turn", math.pi / 2)
+        ]
+
+        for action, value in moves:
+            self.get_logger().info(f"Starting {action} ({value})")
+            if action == "forward":
+                self.move_forward(value)
+            elif action == "turn":
+                self.rotate(value)
+            self.get_logger().info(f"Completed {action} ({value})")
 
 
-def main(args=None):
-    rclpy.init(args=args)
-    node = NavThroughPosesClient()
-
-    # Czekamy na aktualną pozycję po zlokalizowaniu
-    node.set_initial_pose_from_amcl()
-
-    # Pozycja startowa z AMCL
-    start_pose = node._current_pose.pose.pose
-    start_x = start_pose.position.x
-    start_y = start_pose.position.y
-    q = start_pose.orientation
-    start_yaw = math.degrees(math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)))
-
-    # Definicja ruchów względem pozycji startowej dla trajektorii prostokątnej
-    moves = [
-        ("forward", 1.0),  # Bok 1: 1m do przodu
-        ("turn", 90),      # Skręt 90° w lewo
-        ("forward", 0.5),  # Bok 2: 0.5m do przodu
-        ("turn", 90),      # Skręt 90° w lewo
-        ("forward", 1.0),  # Bok 3: 1m do przodu
-        ("turn", 90),      # Skręt 90° w lewo
-        ("forward", 0.5),  # Bok 4: 0.5m do przodu (zamknięcie prostokąta)
-        ("turn", 90)       # Skręt 90° w lewo, aby wrócić do początkowej orientacji
-    ]
-
-    # Generujemy listę pozycji globalnych (tylko po ruchach forward, z orientacją po poprzednim turn)
-    poses = []
-    x, y, yaw_deg = start_x, start_y, start_yaw
-    for action, value in moves:
-        if action == "forward":
-            yaw_rad = math.radians(yaw_deg)
-            x += value * math.cos(yaw_rad)
-            y += value * math.sin(yaw_rad)
-            # Dodajemy pose po forward z bieżącą orientacją (po poprzednim turn)
-            poses.append(create_pose(x, y, yaw_deg))
-        elif action == "turn":
-            yaw_deg = (yaw_deg + value) % 360
-
-    # Opcjonalnie: Dodaj ostatnią pose z tą samą pozycją, ale z finalną orientacją po ostatnim turn
-    # To pozwoli robotowi obrócić się w miejscu do początkowej orientacji bez ruchu
-    # poses.append(create_pose(x, y, yaw_deg))
-
-    # Wysyłamy całą trasę (narożniki prostokąta)
-    node.send_goal(poses)
-    rclpy.spin(node)
+def main():
+    rclpy.init()
+    node = MoveSequence()
+    node.execute_sequence()
+    rclpy.shutdown()
 
 
 if __name__ == '__main__':
