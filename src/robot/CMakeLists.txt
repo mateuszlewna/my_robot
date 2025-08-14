@@ -1,15 +1,13 @@
 cmake_minimum_required(VERSION 3.8)
 project(robot)
 
-# Find ament_cmake, which provides the necessary build tools for ROS 2.
+# Znajdź ament_cmake, potrzebne do budowania pakietów ROS 2
 find_package(ament_cmake REQUIRED)
 
-# The install() command is crucial.
-# It tells the build system to copy the entire 'launch' directory
-# to the 'share' folder of your package's installation directory.
-install(DIRECTORY launch
-  DESTINATION share/${my_robot}
+# Skopiuj foldery launch i config do katalogu share pakietu
+install(DIRECTORY launch config
+  DESTINATION share/${PROJECT_NAME}
 )
 
-# This command marks the end of the ament_cmake build rules.
+# Zakończenie konfiguracji pakietu
 ament_package()
