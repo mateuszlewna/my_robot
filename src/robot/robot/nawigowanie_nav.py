@@ -107,7 +107,7 @@ class MoveSequence(Node):
         turned_angle = 0.0
 
         cmd = Twist()
-        cmd.angular.z = 1.0 if angle > 0 else -1.0
+        cmd.angular.z = 0.8 if angle > 0 else -0.8
         start_time = self.get_clock().now()
         timeout = 20.0
 

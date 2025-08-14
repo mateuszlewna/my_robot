@@ -69,7 +69,7 @@ class MoveSequence(Node):
     def rotate(self, angle):
         start_yaw = self.current_yaw
         cmd = Twist()
-        cmd.angular.z = 1.0 if angle > 0 else -1.0  # Zwiększono prędkość kątową
+        cmd.angular.z = 0.8 if angle > 0 else -0.8  # Zwiększono prędkość kątową
         start_time = self.get_clock().now()
         timeout = 20.0  # Zwiększono timeout do 20 sekund
         turned_angle = 0.0

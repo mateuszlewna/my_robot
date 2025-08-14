@@ -31,7 +31,7 @@ class MoveSequenceOdometry(Node):
         cmd.linear.x = 0.0
         self.cmd_vel_pub.publish(cmd)
 
-    def rotate(self, angle, angular_speed=1):
+    def rotate(self, angle, angular_speed=0.8):
         start_yaw = self.current_yaw
         cmd = Twist()
         cmd.angular.z = angular_speed if angle > 0 else -angular_speed
