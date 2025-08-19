@@ -3,42 +3,83 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 import tf2_ros
 import math
-
+from collections import deque
+import time
+from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import Odometry
+import numpy as np
 
 class MoveSequence(Node):
     def __init__(self):
         super().__init__('move_sequence')
         self.pub = self.create_publisher(Twist, '/cmd_vel', 10)
 
-        # Inicjalizacja listenera TF
+        # Initialize TF listener
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
+        # Subscribe to LiDAR data (for monitoring, optional)
+        self.scan_sub = self.create_subscription(
+            LaserScan, '/scan', self.scan_callback, 10)
+
+        # Subscribe to odometry (e.g., from SLAM or AMCL)
+        self.odom_sub = self.create_subscription(
+            Odometry, '/odom', self.odom_callback, 10)
+
+        # Position buffer for smoothing
+        self.position_buffer = deque(maxlen=5)  # 5 last positions
         self.current_x = 0.0
         self.current_y = 0.0
         self.current_yaw = 0.0
+        self.initial_pose = None  # Store initial pose
 
-        # Timer do cyklicznego aktualizowania pozycji z TF
-        self.create_timer(0.5, self.update_pose)
+        # Timer to update pose
+        self.create_timer(0.2, self.update_pose)
+
+    def scan_callback(self, msg):
+        # Optional: Process LiDAR data if needed for custom correction
+        self.get_logger().info("Received LiDAR scan data")
+
+    def odom_callback(self, msg):
+        # Update pose from odometry (e.g., from SLAM)
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        q = msg.pose.pose.orientation
+        yaw = math.atan2(2.0 * (q.w * q.z), 1.0 - 2.0 * (q.z * q.z))
+        self.position_buffer.append((x, y, yaw))
+        if len(self.position_buffer) == self.position_buffer.maxlen:
+            avg_x = sum(p[0] for p in self.position_buffer) / len(self.position_buffer)
+            avg_y = sum(p[1] for p in self.position_buffer) / len(self.position_buffer)
+            avg_yaw = sum(p[2] for p in self.position_buffer) / len(self.position_buffer)
+            self.current_x = avg_x
+            self.current_y = avg_y
+            self.current_yaw = avg_yaw
+            self.get_logger().info(f"Smoothed Pose: x={self.current_x:.2f}, y={self.current_y:.2f}, yaw={self.current_yaw:.2f}")
 
     def update_pose(self):
         try:
-            # Pobierz transformację z map do base_link
             trans = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time())
-            self.current_x = trans.transform.translation.x
-            self.current_y = trans.transform.translation.y
-            # Konwersja kwaternionu na yaw
+            x = trans.transform.translation.x
+            y = trans.transform.translation.y
             q = trans.transform.rotation
-            self.current_yaw = math.atan2(
-                2.0 * (q.w * q.z),
-                1.0 - 2.0 * (q.z * q.z)
-            )
-            self.get_logger().info(f"TF Pose: x={self.current_x}, y={self.current_y}, yaw={self.current_yaw}")
+            yaw = math.atan2(2.0 * (q.w * q.z), 1.0 - 2.0 * (q.z * q.z))
+            self.position_buffer.append((x, y, yaw))
+            if len(self.position_buffer) == self.position_buffer.maxlen:
+                avg_x = sum(p[0] for p in self.position_buffer) / len(self.position_buffer)
+                avg_y = sum(p[1] for p in self.position_buffer) / len(self.position_buffer)
+                avg_yaw = sum(p[2] for p in self.position_buffer) / len(self.position_buffer)
+                self.current_x = avg_x
+                self.current_y = avg_y
+                self.current_yaw = avg_yaw
+                self.get_logger().info(f"TF Smoothed Pose: x={self.current_x:.2f}, y={self.current_y:.2f}, yaw={self.current_yaw:.2f}")
+                # Store initial pose at the start
+                if self.initial_pose is None:
+                    self.initial_pose = (self.current_x, self.current_y, self.current_yaw)
+                    self.get_logger().info(f"Initial Pose: x={self.initial_pose[0]:.2f}, y={self.initial_pose[1]:.2f}, yaw={self.initial_pose[2]:.2f}")
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             self.get_logger().warn(f"TF lookup failed: {e}")
 
     def shortest_angular_distance(self, from_angle, to_angle):
-        """Oblicza najmniejszą różnicę kątów z uwzględnieniem zakresu ±π."""
         diff = to_angle - from_angle
         while diff > math.pi:
             diff -= 2 * math.pi
@@ -49,41 +90,56 @@ class MoveSequence(Node):
     def move_forward(self, distance):
         start_x, start_y = self.current_x, self.current_y
         cmd = Twist()
-        cmd.linear.x = 0.5  # Stała prędkość liniowa
+        cmd.linear.x = 0.3
         start_time = self.get_clock().now()
-        timeout = 20.0  # Zwiększono timeout do 20 sekund
-        while math.sqrt((self.current_x - start_x) ** 2 +
-                        (self.current_y - start_y) ** 2) < distance:
-            if (self.get_clock().now() - start_time).nanoseconds / 1e9 > timeout:
-                self.get_logger().warn(f"Timeout during move_forward ({distance}m)")
+        timeout = 30.0
+        while True:
+            current_distance = math.sqrt((self.current_x - start_x) ** 2 + (self.current_y - start_y) ** 2)
+            if current_distance >= distance or (self.get_clock().now() - start_time).nanoseconds / 1e9 > timeout:
                 break
-            current_distance = math.sqrt((self.current_x - start_x) ** 2 +
-                                        (self.current_y - start_y) ** 2)
             self.get_logger().info(f"Current distance: {current_distance:.3f}/{distance}m")
             self.pub.publish(cmd)
-            rclpy.spin_once(self, timeout_sec=0.5)
+            rclpy.spin_once(self, timeout_sec=0.1)
         cmd.linear.x = 0.0
         self.pub.publish(cmd)
         self.get_logger().info(f"Finished move_forward ({distance}m)")
+        time.sleep(3.0)
+        self.get_logger().info("Waiting 3 seconds at corner")
 
     def rotate(self, angle):
         start_yaw = self.current_yaw
         cmd = Twist()
-        cmd.angular.z = 0.8 if angle > 0 else -0.8  # Zwiększono prędkość kątową
         start_time = self.get_clock().now()
-        timeout = 20.0  # Zwiększono timeout do 20 sekund
-        turned_angle = 0.0
-        while abs(turned_angle) < abs(angle):
-            if (self.get_clock().now() - start_time).nanoseconds / 1e9 > timeout:
-                self.get_logger().warn(f"Timeout during rotate ({angle}rad)")
-                break
+        timeout = 30.0
+        target_yaw = start_yaw + angle
+
+        while (self.get_clock().now() - start_time).nanoseconds / 1e9 < timeout:
             turned_angle = self.shortest_angular_distance(start_yaw, self.current_yaw)
-            self.get_logger().info(f"Current turned angle: {turned_angle:.3f}/{angle}rad")
+            error = self.shortest_angular_distance(self.current_yaw, target_yaw)
+
+            if abs(error) < 0.05:
+                break
+            cmd.angular.z = 0.7 if error > 0 else -0.7
+            self.get_logger().info(f"Turned: {turned_angle:.3f}/{angle}rad, Error: {error:.3f}")
             self.pub.publish(cmd)
-            rclpy.spin_once(self, timeout_sec=0.5)
+            rclpy.spin_once(self, timeout_sec=0.1)
+
         cmd.angular.z = 0.0
         self.pub.publish(cmd)
-        self.get_logger().info(f"Finished rotate ({angle}rad)")
+        self.get_logger().info(f"Finished rotate ({angle}rad), Final angle: {turned_angle:.3f}")
+        time.sleep(3.0)
+        self.get_logger().info("Waiting 3 seconds at corner")
+
+    def calculate_position_error(self):
+        if self.initial_pose is None:
+            self.get_logger().warn("Initial pose not set, cannot calculate error")
+            return None
+        final_x, final_y, final_yaw = self.current_x, self.current_y, self.current_yaw
+        init_x, init_y, init_yaw = self.initial_pose
+        position_error = math.sqrt((final_x - init_x) ** 2 + (final_y - init_y) ** 2)
+        angular_error = abs(self.shortest_angular_distance(final_yaw, init_yaw))
+        self.get_logger().info(f"Position Error: {position_error:.3f}m, Angular Error: {angular_error:.3f}rad")
+        return position_error, angular_error
 
     def execute_sequence(self):
         moves = [
@@ -105,13 +161,20 @@ class MoveSequence(Node):
                 self.rotate(value)
             self.get_logger().info(f"Completed {action} ({value})")
 
+        # Calculate and log position error after completing the trajectory
+        self.calculate_position_error()
 
 def main():
     rclpy.init()
     node = MoveSequence()
-    node.execute_sequence()
-    rclpy.shutdown()
-
+    try:
+        node.execute_sequence()
+    except KeyboardInterrupt:
+        node.get_logger().info("Shutting down gracefully")
+        cmd = Twist()
+        node.pub.publish(cmd)  # Stop the robot
+    finally:
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
