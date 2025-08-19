@@ -27,21 +27,20 @@ class MoveSequence(Node):
             Odometry, '/odom', self.odom_callback, 10)
 
         # Position buffer for smoothing
-        self.position_buffer = deque(maxlen=5)  # 5 last positions
+        self.position_buffer = deque(maxlen=5)
         self.current_x = 0.0
         self.current_y = 0.0
         self.current_yaw = 0.0
-        self.initial_pose = None  # Store initial pose
+        self.initial_pose = None
+        self.last_log_time = 0.0  # Global rate limiter for logging
 
         # Timer to update pose
-        self.create_timer(0.2, self.update_pose)
+        self.create_timer(0.1, self.update_pose)
 
     def scan_callback(self, msg):
-        # Optional: Process LiDAR data if needed for custom correction
-        self.get_logger().info("Received LiDAR scan data")
+        pass  # No logging to reduce clutter
 
     def odom_callback(self, msg):
-        # Update pose from odometry (e.g., from SLAM)
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
         q = msg.pose.pose.orientation
@@ -54,7 +53,10 @@ class MoveSequence(Node):
             self.current_x = avg_x
             self.current_y = avg_y
             self.current_yaw = avg_yaw
-            self.get_logger().info(f"Smoothed Pose: x={self.current_x:.2f}, y={self.current_y:.2f}, yaw={self.current_yaw:.2f}")
+            current_time = self.get_clock().now().nanoseconds / 1e9
+            if current_time - self.last_log_time >= 1.0:
+                self.get_logger().debug(f"Smoothed Pose: x={self.current_x:.2f}, y={self.current_y:.2f}, yaw={self.current_yaw:.2f}")
+                self.last_log_time = current_time
 
     def update_pose(self):
         try:
@@ -71,13 +73,18 @@ class MoveSequence(Node):
                 self.current_x = avg_x
                 self.current_y = avg_y
                 self.current_yaw = avg_yaw
-                self.get_logger().info(f"TF Smoothed Pose: x={self.current_x:.2f}, y={self.current_y:.2f}, yaw={self.current_yaw:.2f}")
-                # Store initial pose at the start
+                current_time = self.get_clock().now().nanoseconds / 1e9
                 if self.initial_pose is None:
                     self.initial_pose = (self.current_x, self.current_y, self.current_yaw)
                     self.get_logger().info(f"Initial Pose: x={self.initial_pose[0]:.2f}, y={self.initial_pose[1]:.2f}, yaw={self.initial_pose[2]:.2f}")
+                elif current_time - self.last_log_time >= 1.0:
+                    self.get_logger().debug(f"TF Smoothed Pose: x={self.current_x:.2f}, y={self.current_y:.2f}, yaw={self.current_yaw:.2f}")
+                    self.last_log_time = current_time
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-            self.get_logger().warn(f"TF lookup failed: {e}")
+            current_time = self.get_clock().now().nanoseconds / 1e9
+            if current_time - self.last_log_time >= 1.0:
+                self.get_logger().warn(f"TF lookup failed: {e}")
+                self.last_log_time = current_time
 
     def shortest_angular_distance(self, from_angle, to_angle):
         diff = to_angle - from_angle
@@ -93,13 +100,18 @@ class MoveSequence(Node):
         cmd.linear.x = 0.3
         start_time = self.get_clock().now()
         timeout = 30.0
+        last_log_distance = -0.1
         while True:
             current_distance = math.sqrt((self.current_x - start_x) ** 2 + (self.current_y - start_y) ** 2)
             if current_distance >= distance or (self.get_clock().now() - start_time).nanoseconds / 1e9 > timeout:
                 break
-            self.get_logger().info(f"Current distance: {current_distance:.3f}/{distance}m")
+            current_time = self.get_clock().now().nanoseconds / 1e9
+            if abs(current_distance - last_log_distance) >= 0.1 and current_time - self.last_log_time >= 1.0:
+                self.get_logger().info(f"Current distance: {current_distance:.3f}/{distance}m")
+                self.last_log_time = current_time
+                last_log_distance = current_distance
             self.pub.publish(cmd)
-            rclpy.spin_once(self, timeout_sec=0.1)
+            rclpy.spin_once(self, timeout_sec=0.05)
         cmd.linear.x = 0.0
         self.pub.publish(cmd)
         self.get_logger().info(f"Finished move_forward ({distance}m)")
@@ -110,20 +122,30 @@ class MoveSequence(Node):
         start_yaw = self.current_yaw
         cmd = Twist()
         start_time = self.get_clock().now()
-        timeout = 30.0
+        timeout = 60.0
         target_yaw = start_yaw + angle
-
+        kp = 1.0  # Proportional gain (adjust for faster/slower response)
+        max_angular_vel = 0.7  # Maximum angular velocity in rad/s
+        min_angular_vel = 0.6  # Minimum angular velocity in rad/s
+        last_log_error = float('inf')
         while (self.get_clock().now() - start_time).nanoseconds / 1e9 < timeout:
-            turned_angle = self.shortest_angular_distance(start_yaw, self.current_yaw)
             error = self.shortest_angular_distance(self.current_yaw, target_yaw)
-
-            if abs(error) < 0.05:
+            turned_angle = self.shortest_angular_distance(start_yaw, self.current_yaw)
+            if abs(error) < 0.1:
                 break
-            cmd.angular.z = 0.7 if error > 0 else -0.7
-            self.get_logger().info(f"Turned: {turned_angle:.3f}/{angle}rad, Error: {error:.3f}")
+            # Apply proportional control with minimum and maximum angular velocity
+            proportional_vel = kp * error
+            if abs(proportional_vel) < min_angular_vel:
+                cmd.angular.z = min_angular_vel * (1 if error > 0 else -1)
+            else:
+                cmd.angular.z = max(min(proportional_vel, max_angular_vel), -max_angular_vel)
+            current_time = self.get_clock().now().nanoseconds / 1e9
+            if abs(error - last_log_error) >= 0.01 and current_time - self.last_log_time >= 1.0:
+                self.get_logger().info(f"Turned: {turned_angle:.3f}/{angle}rad, Error: {error:.3f}, Angular Vel: {cmd.angular.z:.3f}")
+                self.last_log_time = current_time
+                last_log_error = error
             self.pub.publish(cmd)
-            rclpy.spin_once(self, timeout_sec=0.1)
-
+            rclpy.spin_once(self, timeout_sec=0.05)
         cmd.angular.z = 0.0
         self.pub.publish(cmd)
         self.get_logger().info(f"Finished rotate ({angle}rad), Final angle: {turned_angle:.3f}")
@@ -153,15 +175,19 @@ class MoveSequence(Node):
             ("turn", math.pi / 2)
         ]
 
-        for action, value in moves:
-            self.get_logger().info(f"Starting {action} ({value})")
-            if action == "forward":
-                self.move_forward(value)
-            elif action == "turn":
-                self.rotate(value)
-            self.get_logger().info(f"Completed {action} ({value})")
+        for i, (action, value) in enumerate(moves):
+            self.get_logger().info(f"Starting {action} ({value}), Step {i+1}/{len(moves)}")
+            try:
+                if action == "forward":
+                    self.move_forward(value)
+                elif action == "turn":
+                    self.rotate(value)
+                self.get_logger().info(f"Completed {action} ({value}), Step {i+1}/{len(moves)}")
+            except Exception as e:
+                self.get_logger().error(f"Error during {action} ({value}): {e}")
+                break
 
-        # Calculate and log position error after completing the trajectory
+        self.get_logger().info("Trajectory execution completed")
         self.calculate_position_error()
 
 def main():
@@ -172,7 +198,11 @@ def main():
     except KeyboardInterrupt:
         node.get_logger().info("Shutting down gracefully")
         cmd = Twist()
-        node.pub.publish(cmd)  # Stop the robot
+        node.pub.publish(cmd)
+    except Exception as e:
+        node.get_logger().error(f"Unexpected error: {e}")
+        cmd = Twist()
+        node.pub.publish(cmd)
     finally:
         rclpy.shutdown()
 
