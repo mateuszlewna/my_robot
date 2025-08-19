@@ -158,9 +158,14 @@ class MoveSequence(Node):
             return None
         final_x, final_y, final_yaw = self.current_x, self.current_y, self.current_yaw
         init_x, init_y, init_yaw = self.initial_pose
-        position_error = math.sqrt((final_x - init_x) ** 2 + (final_y - init_y) ** 2)
+        x_error = final_x - init_x
+        y_error = final_y - init_y
+        position_error = math.sqrt(x_error**2 + y_error**2)
         angular_error = abs(self.shortest_angular_distance(final_yaw, init_yaw))
-        self.get_logger().info(f"Position Error: {position_error:.3f}m, Angular Error: {angular_error:.3f}rad")
+        self.get_logger().info(
+            f"Position Error: {position_error:.3f}m (x_error: {x_error:.3f}m, y_error: {y_error:.3f}m), "
+            f"Angular Error: {angular_error:.3f}rad"
+        )
         return position_error, angular_error
 
     def execute_sequence(self):
