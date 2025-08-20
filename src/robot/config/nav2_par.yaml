@@ -38,6 +38,8 @@ amcl:
     z_rand: 0.5
     z_short: 0.05
     scan_topic: scan
+    publish_particlecloud: true
+    particle_cloud_topic: "/particle_cloud"
 
 bt_navigator:
   ros__parameters:
