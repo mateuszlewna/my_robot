@@ -1,32 +1,52 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.duration import Duration
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
 import tf2_ros
 import math
 from collections import deque
 import time
+import numpy as np
 
-class MoveSequence(Node):
+class AMCLTest(Node):
     def __init__(self):
-        super().__init__('move_sequence')
+        super().__init__('amcl_test')
         self.pub = self.create_publisher(Twist, '/cmd_vel', 10)
 
-        # TF listener dla map -> base_link (Nav2/AMCL)
+        # Initialize TF listener
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        # Bufor do wygładzania pozycji
+        # Subscribe to AMCL pose
+        self.amcl_sub = self.create_subscription(
+            PoseWithCovarianceStamped, '/amcl_pose', self.amcl_callback, 10)
+
+        # Position buffer for smoothing
         self.position_buffer = deque(maxlen=5)
         self.current_x = 0.0
         self.current_y = 0.0
         self.current_yaw = 0.0
         self.initial_pose = None
-        self.pose_ready = False
         self.last_log_time = 0.0
+        self.trajectory_poses = []  # Store poses for error analysis
 
-        # Timer do aktualizacji pozycji
+        # Timer to update pose
         self.create_timer(0.1, self.update_pose)
+
+    def amcl_callback(self, msg):
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        q = msg.pose.pose.orientation
+        yaw = math.atan2(2.0 * (q.w * q.z), 1.0 - 2.0 * (q.z * q.z))
+        self.position_buffer.append((x, y, yaw))
+        self.get_logger().info(f"AMCL Pose received: x={x:.2f}, y={y:.2f}, yaw={yaw:.2f}")
+        if len(self.position_buffer) == self.position_buffer.maxlen:
+            self.current_x = sum(p[0] for p in self.position_buffer) / len(self.position_buffer)
+            self.current_y = sum(p[1] for p in self.position_buffer) / len(self.position_buffer)
+            self.current_yaw = sum(p[2] for p in self.position_buffer) / len(self.position_buffer)
+            current_time = self.get_clock().now().nanoseconds / 1e9
+            if current_time - self.last_log_time >= 1.0:
+                self.get_logger().debug(f"AMCL Pose: x={self.current_x:.2f}, y={self.current_y:.2f}, yaw={self.current_yaw:.2f}")
+                self.last_log_time = current_time
 
     def update_pose(self):
         try:
@@ -34,40 +54,26 @@ class MoveSequence(Node):
             x = trans.transform.translation.x
             y = trans.transform.translation.y
             q = trans.transform.rotation
-            yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
-
+            yaw = math.atan2(2.0 * (q.w * q.z), 1.0 - 2.0 * (q.z * q.z))
             self.position_buffer.append((x, y, yaw))
+            self.get_logger().info(f"TF Pose: x={x:.2f}, y={y:.2f}, yaw={yaw:.2f}")
             if len(self.position_buffer) == self.position_buffer.maxlen:
                 self.current_x = sum(p[0] for p in self.position_buffer) / len(self.position_buffer)
                 self.current_y = sum(p[1] for p in self.position_buffer) / len(self.position_buffer)
                 self.current_yaw = sum(p[2] for p in self.position_buffer) / len(self.position_buffer)
-                self.pose_ready = True
-
+                current_time = self.get_clock().now().nanoseconds / 1e9
                 if self.initial_pose is None:
                     self.initial_pose = (self.current_x, self.current_y, self.current_yaw)
-                    self.get_logger().info(
-                        f"Początkowa pozycja: x={self.current_x:.2f}, y={self.current_y:.2f}, yaw={self.current_yaw:.2f}"
-                    )
-
-                current_time = self.get_clock().now().nanoseconds / 1e9
-                if current_time - self.last_log_time >= 1.0:
-                    self.get_logger().debug(
-                        f"Wygładzona pozycja: x={self.current_x:.2f}, y={self.current_y:.2f}, yaw={self.current_yaw:.2f}"
-                    )
+                    self.get_logger().info(f"Initial Pose: x={self.initial_pose[0]:.2f}, y={self.initial_pose[1]:.2f}, yaw={self.initial_pose[2]:.2f}")
+                    self.trajectory_poses.append((self.current_x, self.current_y, self.current_yaw))
+                elif current_time - self.last_log_time >= 1.0:
+                    self.get_logger().debug(f"TF AMCL Pose: x={self.current_x:.2f}, y={self.current_y:.2f}, yaw={self.current_yaw:.2f}")
                     self.last_log_time = current_time
-
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             current_time = self.get_clock().now().nanoseconds / 1e9
             if current_time - self.last_log_time >= 1.0:
-                self.get_logger().warn(f"Błąd TF: {e}")
+                self.get_logger().warn(f"TF lookup failed: {e}")
                 self.last_log_time = current_time
-
-    def wait_for_pose(self, timeout=5.0):
-        start = self.get_clock().now()
-        while not self.pose_ready:
-            if (self.get_clock().now() - start) > Duration(seconds=timeout):
-                raise RuntimeError("Nie udało się uzyskać pozycji z TF w czasie")
-            rclpy.spin_once(self, timeout_sec=0.05)
 
     def shortest_angular_distance(self, from_angle, to_angle):
         diff = to_angle - from_angle
@@ -77,127 +83,136 @@ class MoveSequence(Node):
             diff += 2 * math.pi
         return diff
 
-    def move_forward(self, distance, speed=0.3, timeout=30.0):
-        self.wait_for_pose()
-        start_x, start_y = self.current_x, self.current_y
-        start_yaw = self.current_yaw  # Zachowaj początkowy yaw dla korekcji
-        cmd = Twist()
-        cmd.linear.x = speed
-        kp_angular = 0.5  # Wzmocnienie dla korekcji orientacji
-        start_time = self.get_clock().now()
-        last_log_distance = -0.1
+    def move_forward(self, distance):
+        # Czekaj na pełny position_buffer
+        while len(self.position_buffer) < self.position_buffer.maxlen:
+            self.get_logger().info("Waiting for position_buffer to fill...")
+            rclpy.spin_once(self, timeout_sec=0.1)
+            time.sleep(0.1)
 
+        start_x, start_y = self.current_x, self.current_y
+        cmd = Twist()
+        cmd.linear.x = 0.6  # Dopasowana prędkość do min_vel_x kontrolera DWB
+        start_time = self.get_clock().now()
+        timeout = 60.0  # Zwiększony timeout
+        last_log_distance = -0.1
         while True:
             current_distance = math.sqrt((self.current_x - start_x) ** 2 + (self.current_y - start_y) ** 2)
-            current_time = self.get_clock().now().nanoseconds / 1e9
-            if current_distance >= distance or (self.get_clock().now() - start_time).nanoseconds / 1e9 > timeout:
+            self.get_logger().info(f"Current distance: {current_distance:.3f}/{distance}m, Position: x={self.current_x:.2f}, y={self.current_y:.2f}")
+            if current_distance >= distance * 0.95 or (self.get_clock().now() - start_time).nanoseconds / 1e9 > timeout:
                 break
-
-            # Korekcja orientacji podczas ruchu do przodu
-            yaw_error = self.shortest_angular_distance(self.current_yaw, start_yaw)
-            cmd.angular.z = max(min(kp_angular * yaw_error, 0.3), -0.3)  # Ogranicz korekcję do ±0.3 rad/s
-
+            current_time = self.get_clock().now().nanoseconds / 1e9
             if abs(current_distance - last_log_distance) >= 0.1 and current_time - self.last_log_time >= 1.0:
-                self.get_logger().info(f"Dystans: {current_distance:.2f}/{distance:.2f}m, Błąd yaw: {yaw_error:.2f}rad")
+                self.get_logger().info(f"Publishing cmd_vel: linear.x = 0.6")
                 self.last_log_time = current_time
                 last_log_distance = current_distance
             self.pub.publish(cmd)
             rclpy.spin_once(self, timeout_sec=0.05)
-
         cmd.linear.x = 0.0
-        cmd.angular.z = 0.0
         self.pub.publish(cmd)
-        self.get_logger().info(f"Zakończono ruch do przodu ({distance}m)")
-        time.sleep(3.0)  # Zwiększona pauza
+        self.get_logger().info(f"Finished move_forward ({distance}m)")
+        time.sleep(3.0)
+        self.trajectory_poses.append((self.current_x, self.current_y, self.current_yaw))
+        self.get_logger().info("Waiting 3 seconds at corner")
 
-    def rotate(self, angle, angular_speed=0.7, timeout=60.0):
-        self.wait_for_pose()
+    def rotate(self, angle):
         start_yaw = self.current_yaw
-        target_yaw = start_yaw + angle
         cmd = Twist()
-        kp = 1.2  # Zwiększone wzmocnienie proporcjonalne
-        max_angular_speed = angular_speed  # Maksymalna prędkość: 0.7 rad/s
-        min_angular_speed = 0.6  # Zmniejszona minimalna prędkość: 0.4 rad/s
         start_time = self.get_clock().now()
+        timeout = 60.0
+        target_yaw = start_yaw + angle
+        kp = 1.0
+        max_angular_vel = 0.7  # Dopasowane do max_vel_theta kontrolera DWB
+        min_angular_vel = 0.6
         last_log_error = float('inf')
-
         while (self.get_clock().now() - start_time).nanoseconds / 1e9 < timeout:
             error = self.shortest_angular_distance(self.current_yaw, target_yaw)
             turned_angle = self.shortest_angular_distance(start_yaw, self.current_yaw)
-            if abs(error) < 0.02:  # Zwiększona precyzja: 0.02 rad (~1.15°)
+            if abs(error) < 0.1:
                 break
             proportional_vel = kp * error
-            cmd.angular.z = max(min(proportional_vel, max_angular_speed), -max_angular_speed)
-            if abs(proportional_vel) < min_angular_speed:
-                cmd.angular.z = min_angular_speed * (1 if error > 0 else -1)
+            cmd.angular.z = max(min(proportional_vel, max_angular_vel), -max_angular_vel)
+            if abs(proportional_vel) < min_angular_vel:
+                cmd.angular.z = min_angular_vel * (1 if error > 0 else -1)
             current_time = self.get_clock().now().nanoseconds / 1e9
             if abs(error - last_log_error) >= 0.01 and current_time - self.last_log_time >= 1.0:
-                self.get_logger().info(f"Obrót: {turned_angle:.2f}/{angle:.2f}rad, Błąd: {error:.2f}rad")
+                self.get_logger().info(f"Turned: {turned_angle:.3f}/{angle}rad, Error: {error:.3f}, Angular Vel: {cmd.angular.z:.3f}")
                 self.last_log_time = current_time
                 last_log_error = error
             self.pub.publish(cmd)
             rclpy.spin_once(self, timeout_sec=0.05)
-
         cmd.angular.z = 0.0
         self.pub.publish(cmd)
-        self.get_logger().info(f"Zakończono obrót ({angle:.2f}rad)")
-        time.sleep(3.0)  # Zwiększona pauza
+        self.get_logger().info(f"Finished rotate ({angle}rad), Final angle: {turned_angle:.3f}")
+        time.sleep(3.0)
+        self.trajectory_poses.append((self.current_x, self.current_y, self.current_yaw))
+        self.get_logger().info("Waiting 3 seconds at corner")
 
     def calculate_position_error(self):
-        if self.initial_pose is None:
-            self.get_logger().warn("Początkowa pozycja nieustalona, nie można obliczyć błędu")
+        if self.initial_pose is None or len(self.trajectory_poses) < 2:
+            self.get_logger().warn("Insufficient pose data to calculate error")
             return None
-        final_x, final_y, final_yaw = self.current_x, self.current_y, self.current_yaw
+        final_x, final_y, final_yaw = self.trajectory_poses[-1]
         init_x, init_y, init_yaw = self.initial_pose
         x_error = final_x - init_x
         y_error = final_y - init_y
-        position_error = math.sqrt(x_error ** 2 + y_error ** 2)
+        position_error = math.sqrt(x_error**2 + y_error**2)
         angular_error = abs(self.shortest_angular_distance(final_yaw, init_yaw))
         self.get_logger().info(
-            f"Błąd pozycji: {position_error:.3f}m (x: {x_error:.3f}m, y: {y_error:.3f}m), "
-            f"Błąd kąta: {angular_error:.3f}rad"
+            f"Position Error: {position_error:.3f}m (x_error: {x_error:.3f}m, y_error: {y_error:.3f}m), "
+            f"Angular Error: {angular_error:.3f}rad"
         )
         return position_error, angular_error
 
     def execute_sequence(self):
+        # Czekaj na inicjalizację AMCL i TF
+        self.get_logger().info("Waiting for AMCL and TF initialization...")
+        start_time = self.get_clock().now()
+        while len(self.position_buffer) < self.position_buffer.maxlen:
+            self.get_logger().info("Waiting for position_buffer to fill...")
+            rclpy.spin_once(self, timeout_sec=0.1)
+            if (self.get_clock().now() - start_time).nanoseconds / 1e9 > 10.0:
+                self.get_logger().warn("AMCL initialization timeout")
+                break
+            time.sleep(0.1)
+
         moves = [
-            ("forward", 1.0),  # Dłuższy bok prostokąta
+            ("forward", 1.0),
             ("turn", math.pi / 2),
-            ("forward", 0.5),  # Krótki bok prostokąta
+            ("forward", 0.5),
             ("turn", math.pi / 2),
-            ("forward", 1.0),  # Dłuższy bok
+            ("forward", 1.0),
             ("turn", math.pi / 2),
-            ("forward", 0.5),  # Krótki bok
+            ("forward", 0.5),
             ("turn", math.pi / 2)
         ]
 
-        for i, (action, value) in enumerate(moves, 1):
-            self.get_logger().info(f"Rozpoczynanie {action} ({value}), Krok {i}/{len(moves)}")
+        for i, (action, value) in enumerate(moves):
+            self.get_logger().info(f"Starting {action} ({value}), Step {i+1}/{len(moves)}")
             try:
                 if action == "forward":
                     self.move_forward(value)
                 elif action == "turn":
                     self.rotate(value)
-                self.get_logger().info(f"Zakończono {action} ({value}), Krok {i}/{len(moves)}")
+                self.get_logger().info(f"Completed {action} ({value}), Step {i+1}/{len(moves)}")
             except Exception as e:
-                self.get_logger().error(f"Błąd podczas {action} ({value}): {e}")
+                self.get_logger().error(f"Error during {action} ({value}): {e}")
                 break
 
-        self.get_logger().info("Zakończono sekwencję ruchów")
+        self.get_logger().info("Trajectory execution completed")
         self.calculate_position_error()
 
 def main():
     rclpy.init()
-    node = MoveSequence()
+    node = AMCLTest()
     try:
-        node.wait_for_pose(timeout=5.0)
         node.execute_sequence()
     except KeyboardInterrupt:
-        node.get_logger().info("Przerywanie programu")
+        node.get_logger().info("Shutting down gracefully")
         cmd = Twist()
         node.pub.publish(cmd)
     except Exception as e:
-        node.get_logger().error(f"Nieoczekiwany błąd: {e}")
+        node.get_logger().error(f"Unexpected error: {e}")
         cmd = Twist()
         node.pub.publish(cmd)
     finally:
