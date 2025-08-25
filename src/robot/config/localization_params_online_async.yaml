@@ -7,11 +7,11 @@ slam_toolbox:
 
     # ROS Parameters
     odom_frame: odom
-    map_frame: map  
+    map_frame: map
     base_frame: base_link
     scan_topic: /scan
     
-    mode: localization  # Tryb lokalizowania
+    mode: localization  # Tryb lokalizacji
 
     # Logowanie i podstawowe ustawienia
     debug_logging: true  # Włączone dla debugowania problemów
@@ -37,27 +37,27 @@ slam_toolbox:
     scan_buffer_size: 20  # Zwiększono dla lepszej korelacji w dynamicznych środowiskach
     scan_buffer_maximum_scan_distance: 12.0  # Dopasowano do max_laser_range
     
-    # # Parametry zamykania pętli
-    # do_loop_closing: true
-    # loop_search_maximum_distance: 12.0  # Zwiększono dla większych przestrzeni
-    # link_match_minimum_response_fine: 0.2  # Zwiększono dla bardziej rygorystycznego dopasowania
-    # link_scan_maximum_distance: 2.0  # Zwiększono dla większej tolerancji
-    # loop_match_minimum_chain_size: 8  # Zmniejszono dla szybszego wykrywania pętli
-    # loop_match_minimum_response_coarse: 0.4  # Nieco zwiększono dla stabilności
-    # loop_match_minimum_response_fine: 0.5  # Zwiększono dla dokładniejszego zamykania pętli
+    # Parametry zamykania pętli
+    do_loop_closing: true
+    loop_search_maximum_distance: 12.0  # Zwiększono dla większych przestrzeni
+    link_match_minimum_response_fine: 0.2  # Zwiększono dla bardziej rygorystycznego dopasowania
+    link_scan_maximum_distance: 2.0  # Zwiększono dla większej tolerancji
+    loop_match_minimum_chain_size: 8  # Zmniejszono dla szybszego wykrywania pętli
+    loop_match_minimum_response_coarse: 0.4  # Nieco zwiększono dla stabilności
+    loop_match_minimum_response_fine: 0.5  # Zwiększono dla dokładniejszego zamykania pętli
     
-    # # Pozostałe parametry
-    # correlation_search_space_dimension: 0.5
-    # correlation_search_space_resolution: 0.01
-    # correlation_search_space_smear_deviation: 0.1
-    # loop_search_space_dimension: 10.0  # Zwiększono dla większych przestrzeni
-    # loop_search_space_resolution: 0.05
-    # loop_search_space_smear_deviation: 0.03
-    # distance_variance_penalty: 0.3  # Zmniejszono dla mniejszej kary za odległość
-    # angle_variance_penalty: 0.7  # Zmniejszono dla mniejszej kary za kąt
-    # fine_search_angle_offset: 0.00349
-    # coarse_search_angle_offset: 0.349
-    # coarse_angle_resolution: 0.0349
-    # minimum_angle_penalty: 0.9
-    # minimum_distance_penalty: 0.5
-    # use_response_expansion: true
+    # Pozostałe parametry
+    correlation_search_space_dimension: 0.5
+    correlation_search_space_resolution: 0.01
+    correlation_search_space_smear_deviation: 0.1
+    loop_search_space_dimension: 10.0  # Zwiększono dla większych przestrzeni
+    loop_search_space_resolution: 0.05
+    loop_search_space_smear_deviation: 0.03
+    distance_variance_penalty: 1  # Zmniejszono dla mniejszej kary za odległość
+    angle_variance_penalty: 1.5  # Zmniejszono dla mniejszej kary za kąt
+    fine_search_angle_offset: 0.00698
+    coarse_search_angle_offset: 0.698 
+    coarse_angle_resolution: 0.0698 
+    minimum_angle_penalty: 0.5
+    minimum_distance_penalty: 0.2
+    use_response_expansion: true
