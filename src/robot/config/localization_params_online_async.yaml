@@ -11,7 +11,7 @@ slam_toolbox:
     base_frame: base_link
     scan_topic: /scan
     
-    mode: localization  # Tryb lokalizacji
+    mode: localization  # Tryb mapowania
 
     # Logowanie i podstawowe ustawienia
     debug_logging: true  # Włączone dla debugowania problemów
@@ -53,11 +53,11 @@ slam_toolbox:
     loop_search_space_dimension: 10.0  # Zwiększono dla większych przestrzeni
     loop_search_space_resolution: 0.05
     loop_search_space_smear_deviation: 0.03
-    distance_variance_penalty: 1  # Zmniejszono dla mniejszej kary za odległość
-    angle_variance_penalty: 1.5  # Zmniejszono dla mniejszej kary za kąt
-    fine_search_angle_offset: 0.00698
-    coarse_search_angle_offset: 0.698 
-    coarse_angle_resolution: 0.0698 
-    minimum_angle_penalty: 0.5
-    minimum_distance_penalty: 0.2
+    distance_variance_penalty: 0.3  # Zmniejszono dla mniejszej kary za odległość
+    angle_variance_penalty: 0.7  # Zmniejszono dla mniejszej kary za kąt
+    fine_search_angle_offset: 0.00349
+    coarse_search_angle_offset: 0.349
+    coarse_angle_resolution: 0.0349
+    minimum_angle_penalty: 0.9
+    minimum_distance_penalty: 0.5
     use_response_expansion: true
