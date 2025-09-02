@@ -14,31 +14,31 @@ class MoveSequence(Node):
         super().__init__('move_sequence')
         self.pub = self.create_publisher(Twist, '/cmd_vel', 10)
 
-        # Initialize TF listener
+        # dane z transform
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        # Subscribe to LiDAR data (for monitoring, optional)
+        # dane z lidaru
         self.scan_sub = self.create_subscription(
             LaserScan, '/scan', self.scan_callback, 10)
 
-        # Subscribe to odometry (e.g., from SLAM or AMCL)
+        # dane z odometrii
         self.odom_sub = self.create_subscription(
             Odometry, '/odom', self.odom_callback, 10)
 
-        # Position buffer for smoothing
+        # bufor pozycji
         self.position_buffer = deque(maxlen=5)
         self.current_x = 0.0
         self.current_y = 0.0
         self.current_yaw = 0.0
         self.initial_pose = None
-        self.last_log_time = 0.0  # Global rate limiter for logging
+        self.last_log_time = 0.0  
 
-        # Timer to update pose
+        # timer do odswiezania pozycji
         self.create_timer(0.1, self.update_pose)
 
     def scan_callback(self, msg):
-        pass  # No logging to reduce clutter
+        pass  
 
     def odom_callback(self, msg):
         x = msg.pose.pose.position.x
@@ -124,16 +124,16 @@ class MoveSequence(Node):
         start_time = self.get_clock().now()
         timeout = 60.0
         target_yaw = start_yaw + angle
-        kp = 1.0  # Proportional gain (adjust for faster/slower response)
-        max_angular_vel = 0.7  # Maximum angular velocity in rad/s
-        min_angular_vel = 0.6  # Minimum angular velocity in rad/s
+        kp = 1.0  # wspolczynnik proporcjonalny
+        max_angular_vel = 0.7  # maksymalna predkosc obrotow
+        min_angular_vel = 0.6  # minimalna predkosc obrotow
         last_log_error = float('inf')
         while (self.get_clock().now() - start_time).nanoseconds / 1e9 < timeout:
             error = self.shortest_angular_distance(self.current_yaw, target_yaw)
             turned_angle = self.shortest_angular_distance(start_yaw, self.current_yaw)
             if abs(error) < 0.1:
                 break
-            # Apply proportional control with minimum and maximum angular velocity
+            # implementacja czlonu proporcjonalnego z ograniczeniami na predkosc
             proportional_vel = kp * error
             if abs(proportional_vel) < min_angular_vel:
                 cmd.angular.z = min_angular_vel * (1 if error > 0 else -1)

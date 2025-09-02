@@ -7,7 +7,7 @@ ekf_filter_node:
                        true, true, false,  # x_vel, y_vel - prędkość liniowa jest wiarygodna
                        false, false, true,  # roll_vel, pitch_vel, yaw_vel - prędkość kątowa jest wiarygodna
                        false, false, false]
-        odom0_differential: false # Używamy absolutnej odometrii
+        odom0_differential: false 
 
         # Źródło danych z akcelerometru (imu)
         imu0: "imu/data_raw"

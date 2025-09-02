@@ -1,28 +1,28 @@
 slam_toolbox:
   ros__parameters:
-    # Plugin params
+    # Pluginy
     solver_plugin: solver_plugins::CeresSolver
     ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
     ceres_preconditioner: SCHUR_JACOBI
 
-    # ROS Parameters
+    #framy
     odom_frame: odom
     map_frame: map
     base_frame: base_link
     scan_topic: /scan
     
-    mode: localization  # Tryb mapowania
+    mode: localization  # Tryb lokalizacji
 
     # Logowanie i podstawowe ustawienia
-    debug_logging: true  # Włączone dla debugowania problemów
+    debug_logging: true  
     throttle_scans: 1
-    transform_publish_period: 0.05  # Zwiększono do 0.05 s (20 Hz) dla mniejszego obciążenia
-    map_update_interval: 1.0  # Zmniejszono do 1.0 s dla płynniejszej aktualizacji w RViz
+    transform_publish_period: 0.05  # mniejszego obciążenia
+    map_update_interval: 1.0  # płynniejsza aktualizacja w RViz
     resolution: 0.05
     
-    # Parametry sensora - dopasowane do RPLIDAR A2
-    min_laser_range: 0.3  # Zwiększono, aby odfiltrować szumy bliżej sensora
-    max_laser_range: 16.0  # Zmniejszono dla RPLIDAR A2 (dla A3 ustaw 25.0)
+    # Parametry lidara
+    min_laser_range: 0.3  
+    max_laser_range: 16.0  
 
     # Parametry synchronizacji i buforów
     minimum_time_interval: 0.1  # Zmniejszono dla szybszej reakcji na ruch

@@ -18,7 +18,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         
-        # Węzeł EKF, który fuzjuje dane z Pi
+        # Węzeł EKF, który laczy dane z Pi
         Node(
             package='robot_localization',
             executable='ekf_node',

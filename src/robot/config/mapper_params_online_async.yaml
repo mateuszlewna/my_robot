@@ -1,11 +1,11 @@
 slam_toolbox:
   ros__parameters:
-    # Plugin params
+    # Pluginy
     solver_plugin: solver_plugins::CeresSolver
     ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
     ceres_preconditioner: SCHUR_JACOBI
 
-    # ROS Parameters
+    #framy
     odom_frame: odom
     map_frame: map
     base_frame: base_link
@@ -14,15 +14,15 @@ slam_toolbox:
     mode: mapping  # Tryb mapowania
 
     # Logowanie i podstawowe ustawienia
-    debug_logging: true  # Włączone dla debugowania problemów
+    debug_logging: true  
     throttle_scans: 1
-    transform_publish_period: 0.05  # Zwiększono do 0.05 s (20 Hz) dla mniejszego obciążenia
-    map_update_interval: 1.0  # Zmniejszono do 1.0 s dla płynniejszej aktualizacji w RViz
+    transform_publish_period: 0.05  # mniejszego obciążenia
+    map_update_interval: 1.0  # płynniejsza aktualizacja w RViz
     resolution: 0.05
     
-    # Parametry sensora - dopasowane do RPLIDAR A2
-    min_laser_range: 0.3  # Zwiększono, aby odfiltrować szumy bliżej sensora
-    max_laser_range: 16.0  # Zmniejszono dla RPLIDAR A2 (dla A3 ustaw 25.0)
+    # Parametry lidara
+    min_laser_range: 0.3  
+    max_laser_range: 16.0  
 
     # Parametry synchronizacji i buforów
     minimum_time_interval: 0.1  # Zmniejszono dla szybszej reakcji na ruch
@@ -53,11 +53,11 @@ slam_toolbox:
     loop_search_space_dimension: 10.0  # Zwiększono dla większych przestrzeni
     loop_search_space_resolution: 0.05
     loop_search_space_smear_deviation: 0.03
-    distance_variance_penalty: 0.1  # Zmniejszono dla mniejszej kary za odległość
-    angle_variance_penalty: 0.3  # Zmniejszono dla mniejszej kary za kąt
-    fine_search_angle_offset: 0.00174
-    coarse_search_angle_offset: 0.1745
-    coarse_angle_resolution: 0.01745
-    minimum_angle_penalty: 0.95
-    minimum_distance_penalty: 0.8
+    distance_variance_penalty: 0.3  # Zmniejszono dla mniejszej kary za odległość
+    angle_variance_penalty: 0.7  # Zmniejszono dla mniejszej kary za kąt
+    fine_search_angle_offset: 0.00349
+    coarse_search_angle_offset: 0.349
+    coarse_angle_resolution: 0.0349
+    minimum_angle_penalty: 0.9
+    minimum_distance_penalty: 0.5
     use_response_expansion: true

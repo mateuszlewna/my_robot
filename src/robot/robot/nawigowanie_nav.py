@@ -11,10 +11,10 @@ class AMCLTest(Node):
     def __init__(self):
         super().__init__('amcl_test')
 
-        # Publisher cmd_vel (bez leading slash!)
+        # Publisher cmd_vel
         self.pub = self.create_publisher(Twist, 'cmd_vel', 10)
 
-        # Subskrypcja na amcl_pose z poprawnym QoS
+        # dane z amcl_pose
         self.amcl_sub = self.create_subscription(
             PoseWithCovarianceStamped,
             'amcl_pose',
