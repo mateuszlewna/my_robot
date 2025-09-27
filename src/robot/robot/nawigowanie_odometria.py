@@ -43,10 +43,11 @@ class MoveSequenceOdometry(Node):
 
     def execute_sequence(self):
         moves = [
-            (1.0, math.pi/2),   # 1m, skręt 90°
-            (0.5, math.pi/2),   # 0.5m, skręt 90°
+            (1.0, math.pi/2),   # 1m, skręt 90°   
+            (0.5, math.pi/2),   # 0.5m, skręt 90° 
             (1.0, math.pi/2),   # 1m, skręt 90°
             (0.5, math.pi/2)    # 0.5m, skręt 90°
+          
         ]
         for distance, angle in moves:
             self.move_forward(distance)

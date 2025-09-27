@@ -1,31 +1,19 @@
 /**:
   ros__parameters:
     slam_toolbox:
-      # Parametry, które rozwiążą ostrzeżenia o zakresie lidaru
+      # Ustawienie zakresu lidaru
       laser_min_range: 0.2
       laser_max_range: 16.0
 
       # PARAMETRY ODOMETRII
-      # To jest kluczowe! Upewnij się, że nazwa topicu odometrii jest poprawna
-      # Domyślnie slam_toolbox oczekuje /odom, jeśli Twój odometry_publisher publikuje gdzie indziej, zmień to.
-      odom_topic: "/odom" # Zmień, jeśli Twój odometry_publisher publikuje na innym topicu!
-
-      # Ta opcja powinna być na TRUE, skoro masz odometrię
+      odom_topic: "/odom" 
       use_odometry: true 
 
-      # Częstotliwość aktualizacji mapy (w Hz)
-      # Możesz to dostosować, jeśli mapa wciąż "stoi"
-      map_update_interval: 0.5 # Publikuj mapę co 0.5 sekundy (2 Hz)
-
-      # Inne ogólne parametry (zostaw domyślne, chyba że wiesz co robisz)
+      # Inne ogólne parametry
+      map_update_interval: 0.5
       resolution: 0.05
       base_frame: "base_link"
       odom_frame: "odom"
       map_frame: "map"
-
-      # Parametry do rozwiązywania problemu "dropping message"
-      # Zwiększ queue_size jeśli wiadomości są odrzucane.
-      # Domyślna wartość to zazwyczaj 10-20. Możesz spróbować 50 lub 100.
-      # Pamiętaj, że większa kolejka może zwiększyć opóźnienia.
       laser_queue_size: 50
-      transform_timeout: 0.2 # Czas oczekiwania na transformacje (domyślnie 0.1, zwiększenie może pomóc)
+      transform_timeout: 0.2 

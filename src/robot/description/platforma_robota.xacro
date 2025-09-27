@@ -35,7 +35,7 @@
             <origin xyz="-0.1 0 0"/>
         </joint>
 
-         <!--Chassis LINK  jak bedziesz zmieniał wymiary to w kolizji tez trzeba zmienic-->
+         <!--Platforma jak bedziesz zmieniał wymiary to w kolizji tez trzeba zmienic-->
         <link name="chassis">
             <visual>
                 <origin xyz="0 0 0.055"/>

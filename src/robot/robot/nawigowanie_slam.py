@@ -97,9 +97,9 @@ class MoveSequence(Node):
     def move_forward(self, distance):
         start_x, start_y = self.current_x, self.current_y
         cmd = Twist()
-        cmd.linear.x = 0.3
+        cmd.linear.x = 0.4
         start_time = self.get_clock().now()
-        timeout = 30.0
+        timeout = 120.0
         last_log_distance = -0.1
         while True:
             current_distance = math.sqrt((self.current_x - start_x) ** 2 + (self.current_y - start_y) ** 2)
@@ -170,16 +170,10 @@ class MoveSequence(Node):
 
     def execute_sequence(self):
         moves = [
-            ("forward", 1.0),
-            ("turn", math.pi / 2),
-            ("forward", 0.5),
-            ("turn", math.pi / 2),
-            ("forward", 1.0),
-            ("turn", math.pi / 2),
-            ("forward", 0.5),
-            ("turn", math.pi / 2)
+            ("forward", 3.0),
+   
         ]
-
+  
         for i, (action, value) in enumerate(moves):
             self.get_logger().info(f"Starting {action} ({value}), Step {i+1}/{len(moves)}")
             try:

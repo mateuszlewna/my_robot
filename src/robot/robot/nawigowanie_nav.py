@@ -80,9 +80,9 @@ class AMCLTest(Node):
 
         start_x, start_y = self.current_x, self.current_y
         cmd = Twist()
-        cmd.linear.x = 0.3
+        cmd.linear.x = 0.4
         start_time = self.get_clock().now()
-        timeout = 60.0
+        timeout = 120.0
         last_log_distance = -0.1
 
         while True:
@@ -184,14 +184,11 @@ class AMCLTest(Node):
             time.sleep(0.1)
 
         moves = [
-            ("forward", 1.0),
-            ("turn", math.pi / 2),
-            ("forward", 0.5),
-            ("turn", math.pi / 2),
-            ("forward", 1.0),
-            ("turn", math.pi / 2),
-            ("forward", 0.5),
-            ("turn", math.pi / 2)
+            (1.0, math.pi/2),   # 1m, skręt 90°   
+            (0.5, math.pi/2),   # 0.5m, skręt 90° 
+            (1.0, math.pi/2),   # 1m, skręt 90°
+            (0.5, math.pi/2)    # 0.5m, skręt 90°
+        
         ]
 
         for i, (action, value) in enumerate(moves):
